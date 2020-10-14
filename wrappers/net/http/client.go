@@ -29,6 +29,7 @@ const API_GATEWAY_RESOURCE_TYPE = "api_gateway"
 const EPSAGON_REQUEST_TRACEID_METADATA_KEY = "request_trace_id"
 const AWS_SERVICE_KEY = "aws.service"
 const MAX_METADATA_SIZE = 64 * 1024
+const BODY_DISCARDED = `{"body": "discarded due to large size"}`
 
 type ValidationFunction func(string, string) bool
 
@@ -161,12 +162,12 @@ func (t *TracingTransport) extractRequestData(req *http.Request, tr tracer.Trace
 		return
 	}
 	req.Body = ioutil.NopCloser(bytes.NewReader(buf))
-	// truncates request body to the first 64KB
-	trimmed := buf
+	// discards the request body if greater than 64KB
 	if len(buf) > MAX_METADATA_SIZE {
-		trimmed = buf[0:MAX_METADATA_SIZE]
+		body = BODY_DISCARDED
+		return
 	}
-	body = string(trimmed)
+	body = string(buf)
 	return
 }
 
@@ -433,11 +434,12 @@ func updateResponseData(resp *http.Response, resource *protocol.Resource, metada
 	body, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err == nil {
-		// truncates response body to the first 64KB
-		if len(body) > MAX_METADATA_SIZE {
-			body = body[0:MAX_METADATA_SIZE]
+		// discards response body if greater than 64KB
+		if len(body) < MAX_METADATA_SIZE {
+			resource.Metadata["response_body"] = string(body)
+		} else {
+			resource.Metadata["response_body"] = BODY_DISCARDED
 		}
-		resource.Metadata["response_body"] = string(body)
 	}
 	resp.Body = newReadCloser(body, err)
 }

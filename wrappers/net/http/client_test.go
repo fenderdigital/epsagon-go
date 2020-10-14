@@ -431,7 +431,7 @@ var _ = Describe("ClientWrapper", func() {
 			requests = make([]*http.Request, 0)
 		})
 		Context("sending a request to existing server", func() {
-			It("adds an event with no error, truncating the request body", func() {
+			It("adds an event with no error, discarding the request body", func() {
 				client := &http.Client{Transport: NewTracingTransport()}
 				data := make([]byte, 128*1024)
 				for i := range data {
@@ -448,7 +448,7 @@ var _ = Describe("ClientWrapper", func() {
 				Expect(requests).To(HaveLen(1))
 				Expect(events).To(HaveLen(1))
 				Expect(events[0].ErrorCode).To(Equal(protocol.ErrorCode_OK))
-				Expect([]byte(events[0].Resource.Metadata["request_body"])).To(HaveCap(MAX_METADATA_SIZE))
+				Expect((events[0].Resource.Metadata["request_body"])).To(Equal(BODY_DISCARDED))
 				verifyTraceIDExists(events[0])
 			})
 		})
@@ -482,7 +482,7 @@ var _ = Describe("ClientWrapper", func() {
 			})
 		})
 		Context("request to blacklisted url", func() {
-			It("Adds event with trace ID and the response truncated", func() {
+			It("Adds event with trace ID and the response discarded", func() {
 				client := &http.Client{Transport: NewTracingTransport()}
 				req, err := http.NewRequest(
 					http.MethodGet,
@@ -494,7 +494,7 @@ var _ = Describe("ClientWrapper", func() {
 				}
 				client.Do(req)
 				Expect(events).To(HaveLen(1))
-				Expect([]byte(events[0].Resource.Metadata["response_body"])).To(HaveCap(64 * 1024))
+				Expect(events[0].Resource.Metadata["response_body"]).To(Equal(BODY_DISCARDED))
 				Expect(events[0].ErrorCode).To(Equal(protocol.ErrorCode_OK))
 				verifyTraceIDNotExists(events[0])
 			})
